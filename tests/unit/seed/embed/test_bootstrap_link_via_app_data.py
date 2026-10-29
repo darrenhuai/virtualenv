@@ -644,6 +644,42 @@ def test_seed_image_build_direct_call(tmp_path: Path) -> None:
     ) == (["CopyPipInstall"], True, True)
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows path limits")
+@pytest.mark.parametrize(
+    ("entry", "shortened"),
+    [
+        pytest.param("f" * 158, False, id="file-fits"),
+        pytest.param("f" * 159, True, id="file-too-long"),
+        pytest.param(f"{'d' * 146}/x", False, id="dir-fits"),
+        pytest.param(f"{'d' * 147}/x", True, id="dir-too-long"),
+    ],
+)
+def test_seed_image_short_path_limits(tmp_path: Path, mocker: MockerFixture, entry: str, shortened: bool) -> None:
+    archive: Final = tmp_path / "pkg.whl"
+    _write_zip_with_entry(archive, entry)
+    folder: Final = Path("C:\\" + "a" * 97)  # 100 characters, plus the separator before the entry
+    mocker.patch("virtualenv.util.path.get_short_path_name", return_value="C:\\short")
+    with zipfile.ZipFile(str(archive)) as zip_ref:
+        result: Final = CopyPipInstall._short_path_if_needed(zip_ref, folder)  # ruff:ignore[private-member-access]
+    assert result == (Path("C:\\short") if shortened else folder)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows path limits")
+def test_seed_image_reused_through_short_path(tmp_path: Path, mocker: MockerFixture) -> None:
+    cache: Final = tmp_path / "cache"
+    args: Final = [str(tmp_path / "env"), "--app-data", str(cache), "--no-periodic-update", "--no-setuptools"]
+    mocker.patch("virtualenv.seed.embed.via_app_data.pip_install.base._MAX_PATH", 0)
+    short: Final = mocker.patch("virtualenv.util.path.get_short_path_name", side_effect=lambda name: name)
+    session: Final = cli_run(args, setup_logging=False)
+    short.reset_mock()
+    cli_run(args, setup_logging=False)
+    version: Final = session.interpreter.version_release_str
+    image: Final = (
+        cache / "wheel" / version / "image" / "1" / "CopyPipInstall" / Path(BUNDLE_SUPPORT[version]["pip"]).stem
+    )
+    assert short.call_args_list == [mocker.call(str(image))]
+
+
 def _write_zip_with_entry(zip_path: Path, entry_name: str) -> None:
     with zipfile.ZipFile(str(zip_path), "w") as archive:
         archive.writestr(entry_name, "payload")

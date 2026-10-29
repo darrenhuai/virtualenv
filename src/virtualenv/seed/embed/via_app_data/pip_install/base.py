@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from virtualenv.create.creator import Creator
 
 LOGGER = logging.getLogger(__name__)
+_MAX_PATH: Final = 260  # counts the terminating null
+_MAX_DIR_PATH: Final = _MAX_PATH - 12  # a directory must leave room for an 8.3 file name
 
 
 def _safe_extract_zip(zip_ref: zipfile.ZipFile, target_dir: Path) -> None:
@@ -104,7 +106,11 @@ class PipInstall(ABC):
         if os.name != "nt":
             return folder
         # https://docs.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation
-        if max(len(i) for i in zip_ref.namelist()) + len(str(folder)) <= 260:  # ruff:ignore[magic-value-comparison]
+        names: Final = zip_ref.namelist()
+        root: Final = len(str(folder)) + 1  # the separator before each member
+        longest_file: Final = max(len(i) for i in names)
+        longest_dir: Final = max(len(i.rpartition("/")[0]) for i in names)
+        if root + longest_file < _MAX_PATH and root + longest_dir < _MAX_DIR_PATH:
             return folder
         from virtualenv.util.path import get_short_path_name  # ruff:ignore[import-outside-top-level]
 
@@ -235,7 +241,13 @@ class PipInstall(ABC):
             safe_delete(self._image_dir)
 
     def has_image(self) -> bool:
-        return self._image_dir.exists() and any(self._image_dir.iterdir())
+        if not (self._image_dir.exists() and any(self._image_dir.iterdir())):
+            return False
+        if os.name == "nt":
+            # read a reused image through the short name its build switched to, the long one may be too long for its files
+            with zipfile.ZipFile(str(self._wheel)) as zip_ref:
+                self._image_dir = self._short_path_if_needed(zip_ref, self._image_dir)
+        return True
 
 
 class EntryPointConfig(ConfigParser):
