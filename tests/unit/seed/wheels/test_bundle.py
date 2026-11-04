@@ -71,15 +71,17 @@ def test_version_pinned_not_found(app_data, for_py_version) -> None:
     assert wheel is None
 
 
-def test_version_pinned_is_embed(app_data, for_py_version) -> None:
+@pytest.mark.parametrize("spelling", [pytest.param("{}", id="exact"), pytest.param("{}.0", id="trailing-zero")])
+def test_version_pinned_is_embed(app_data, for_py_version, spelling) -> None:
     expected_wheel = get_embed_wheel("pip", for_py_version)
-    wheel = from_bundle("pip", expected_wheel.version, for_py_version, [], app_data, False, os.environ)
+    wheel = from_bundle("pip", spelling.format(expected_wheel.version), for_py_version, [], app_data, False, os.environ)
     assert wheel is not None
     assert wheel.name == expected_wheel.name
 
 
-def test_version_pinned_in_app_data(app_data, for_py_version, next_pip_wheel) -> None:
-    wheel = from_bundle("pip", next_pip_wheel.version, for_py_version, [], app_data, False, os.environ)
+@pytest.mark.parametrize("spelling", [pytest.param("{}", id="exact"), pytest.param("{}.0", id="trailing-zero")])
+def test_version_pinned_in_app_data(app_data, for_py_version, next_pip_wheel, spelling) -> None:
+    wheel = from_bundle("pip", spelling.format(next_pip_wheel.version), for_py_version, [], app_data, False, os.environ)
     assert wheel is not None
     assert wheel.name == next_pip_wheel.name
 

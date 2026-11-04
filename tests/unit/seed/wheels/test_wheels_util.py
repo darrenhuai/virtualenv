@@ -86,6 +86,13 @@ def test_discover_wheels_skips_unsupported(tmp_path: Path, pip_wheel: Callable[[
     assert [wheel.version for wheel in discover_wheels(tmp_path, "pip", None, "3.12")] == ["1.0"]
 
 
+def test_discover_wheels_matches_equal_version(tmp_path: Path, pip_wheel: Callable[[str, str], Wheel]) -> None:
+    pip_wheel("", "1.0.1")
+    pip_wheel("", "1.0")
+
+    assert [wheel.version for wheel in discover_wheels(tmp_path, "pip", "1.0.0", "3.12")] == ["1.0"]
+
+
 @pytest.fixture
 def pip_wheel(tmp_path: Path) -> Callable[[str, str], Wheel]:
     def build(headers: str, version: str) -> Wheel:

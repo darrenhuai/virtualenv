@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from packaging.utils import canonicalize_version
+
 from virtualenv.seed.wheels.embed import get_embed_wheel
 
 from .periodic_update import periodic_update
@@ -42,8 +44,7 @@ def from_bundle(  # ruff:ignore[too-many-arguments]
 def load_embed_wheel(app_data: AppData, distribution: str, for_py_version: str, version: str | None) -> Wheel | None:
     wheel = get_embed_wheel(distribution, for_py_version)
     if wheel is not None:
-        version_match = version == wheel.version
-        if version is None or version_match:
+        if version is None or canonicalize_version(version) == canonicalize_version(wheel.version):
             with app_data.ensure_extracted(wheel.path, lambda: app_data.house) as wheel_path:  # ty: ignore[invalid-argument-type]
                 wheel = Wheel(wheel_path)
         else:  # if version does not match ignore

@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Final
 from urllib.error import URLError
 from urllib.request import urlopen
 
+from packaging.utils import canonicalize_version
+
 from virtualenv.app_data import AppDataDiskFolder
 from virtualenv.config.convert import BoolType
 from virtualenv.config.env_var import get_env_var
@@ -74,7 +76,7 @@ def periodic_update(  # ruff:ignore[too-many-arguments]
                     return _update_wheel(version)
     else:
         for version in u_log.versions:
-            if version.wheel.version == of_version:
+            if canonicalize_version(version.wheel.version) == canonicalize_version(of_version):
                 return _update_wheel(version)
 
     return wheel

@@ -10,7 +10,7 @@ from virtualenv.run import session_via_cli
 from virtualenv.seed.embed.pip_invoke import PipInvoke
 from virtualenv.seed.embed.via_app_data.via_app_data import FromAppData
 from virtualenv.seed.seeder import Seeder
-from virtualenv.seed.wheels.embed import MIN, OLDEST_SUPPORTED
+from virtualenv.seed.wheels.embed import MIN, OLDEST_SUPPORTED, get_embed_wheel
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -163,6 +163,7 @@ class _VersionInfo(NamedTuple):
     [
         pytest.param("1.zip", "invalid", id="zip"),
         pytest.param("1+local.zip", "archive-like", id="local-zip"),
+        pytest.param("1+local.zip ", "archive-like", id="local-zip-trailing-space"),
         pytest.param("20.0.0.tar.gz", "invalid", id="tar-gz"),
         pytest.param("./pip.whl", "invalid", id="path"),
         pytest.param("invalid", "invalid", id="word"),
@@ -175,3 +176,24 @@ def test_seed_version_rejected_before_creation(
         session_via_cli([str(tmp_path / "env"), "--seeder", seeder, "--pip", version])
     assert (context.value.code, (tmp_path / "env").exists()) == (2, False)
     assert f"argument --pip: {reason} seed version: {version!r}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("seeder", [pytest.param("pip", id="pip"), pytest.param("app-data", id="app-data")])
+@pytest.mark.parametrize(
+    ("source", "spelling"),
+    [
+        pytest.param("cli", " {}", id="cli-leading-space"),
+        pytest.param("cli", "v{}", id="cli-v-prefix"),
+        pytest.param("env", "{}\r", id="env-carriage-return"),
+    ],
+)
+def test_seed_version_normalized(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seeder: str, source: str, spelling: str
+) -> None:
+    version = get_embed_wheel("pip", f"{sys.version_info.major}.{sys.version_info.minor}").version
+    args = [str(tmp_path / "env"), "--seeder", seeder]
+    if source == "env":
+        monkeypatch.setenv("VIRTUALENV_PIP", spelling.format(version))
+    else:
+        args.extend(["--pip", spelling.format(version)])
+    assert session_via_cli(args).seeder.pip_version == version

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Final
 from zipfile import ZipFile
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.utils import canonicalize_version
 from packaging.version import InvalidVersion
 from packaging.version import Version as PackagingVersion
 
@@ -26,7 +27,7 @@ def discover_wheels(from_folder: Path, distribution: str, version: str | None, f
             for filename in from_folder.iterdir()
             if (wheel := Wheel.from_path(filename))
             and wheel.distribution == distribution
-            and (version is None or wheel.version == version)
+            and (version is None or canonicalize_version(wheel.version) == canonicalize_version(version))
             and wheel.support_py(for_py_version)
         ),
         key=attrgetter("parsed_version", "distribution"),
@@ -111,14 +112,15 @@ class Version:
 
     @staticmethod
     def validate(value: str) -> str:
+        """Return the normalized form of a seed version, or the keyword unchanged."""
         if value in {*Version.non_version, "none"}:
             return value
         try:
-            PackagingVersion(value)
+            version = str(PackagingVersion(value))
         except InvalidVersion as exception:
             msg = f"invalid seed version: {value!r}"
             raise ValueError(msg) from exception
-        if value.lower().endswith((
+        if version.lower().endswith((
             ".zip",
             ".whl",
             ".tar",
@@ -134,7 +136,7 @@ class Version:
         )):
             msg = f"archive-like seed version: {value!r}"
             raise ValueError(msg)
-        return value
+        return version
 
 
 __all__ = [
