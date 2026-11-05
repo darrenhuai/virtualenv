@@ -180,15 +180,18 @@ def test_seed_version_rejected_before_creation(
 
 @pytest.mark.parametrize("seeder", [pytest.param("pip", id="pip"), pytest.param("app-data", id="app-data")])
 @pytest.mark.parametrize(
-    ("source", "spelling"),
+    ("source", "spelling", "expected"),
     [
-        pytest.param("cli", " {}", id="cli-leading-space"),
-        pytest.param("cli", "v{}", id="cli-v-prefix"),
-        pytest.param("env", "{}\r", id="env-carriage-return"),
+        pytest.param("cli", " {}", "{}", id="cli-leading-space"),
+        pytest.param("cli", "v{}", "{}", id="cli-v-prefix"),
+        pytest.param("env", "{}\r", "{}", id="env-carriage-return"),
+        pytest.param("env", "none\r", "none", id="env-none-carriage-return"),
+        pytest.param("env", "embed\r", "embed", id="env-embed-carriage-return"),
+        pytest.param("env", "bundle\r", "bundle", id="env-bundle-carriage-return"),
     ],
 )
-def test_seed_version_normalized(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seeder: str, source: str, spelling: str
+def test_seed_version_normalized(  # ruff:ignore[too-many-arguments]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seeder: str, source: str, spelling: str, expected: str
 ) -> None:
     version = get_embed_wheel("pip", f"{sys.version_info.major}.{sys.version_info.minor}").version
     args = [str(tmp_path / "env"), "--seeder", seeder]
@@ -196,4 +199,4 @@ def test_seed_version_normalized(
         monkeypatch.setenv("VIRTUALENV_PIP", spelling.format(version))
     else:
         args.extend(["--pip", spelling.format(version)])
-    assert session_via_cli(args).seeder.pip_version == version
+    assert session_via_cli(args).seeder.pip_version == expected.format(version)
