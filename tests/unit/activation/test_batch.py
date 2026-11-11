@@ -6,18 +6,17 @@ import os
 import subprocess
 import sys
 from argparse import Namespace
+from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from virtualenv import session_via_cli
+from virtualenv import cli_run, session_via_cli
 from virtualenv.activation import BatchActivator
 from virtualenv.config.cli.parser import VirtualEnvOptions
 from virtualenv.info import IS_WIN
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from virtualenv.create.creator import Creator
 
 
@@ -45,6 +44,28 @@ def test_batch_clears_pythonhome(tmp_path: Path) -> None:
     )
 
     assert (result.returncode, result.stdout.splitlines(), result.stderr) == (0, ["unset", inherited], "")
+
+
+@pytest.mark.skipif(not IS_WIN, reason="batch activation requires Windows")
+def test_batch_pydoc_uses_environment_python_without_activation(tmp_path: Path) -> None:
+    creator = cli_run(
+        [str(tmp_path / "env with space"), "--no-seed", "--activators", "batch"], setup_logging=False
+    ).creator
+    (creator.purelib / "only_in_env.py").write_text('"""Documented only inside the environment."""', encoding="utf-8")
+    # no python.exe on PATH and none in the working directory, so only the environment's own interpreter can answer
+    result = subprocess.run(
+        [os.environ["COMSPEC"], "/D", "/C", "call", str(creator.bin_dir / "pydoc.bat"), "only_in_env"],
+        cwd=tmp_path,
+        env={**os.environ, "PATH": str(Path(os.environ["SYSTEMROOT"]) / "System32")},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=False,
+    )
+
+    assert result.returncode == 0, result
+    assert "Documented only inside the environment." in result.stdout, result
 
 
 @pytest.fixture(scope="session")
@@ -93,7 +114,7 @@ def test_batch_pydoc_bat_quoting(tmp_path) -> None:
     pydoc_content = (creator.bin_dir / "pydoc.bat").read_text(encoding="utf-8")
 
     # The python.exe should be quoted to handle paths with spaces like "C:\Program Files\Python39\python.exe"
-    assert '"python.exe"' in pydoc_content, f"python.exe should be quoted in pydoc.bat. Content:\n{pydoc_content}"
+    assert '"%~dp0python.exe"' in pydoc_content, f"python.exe should be quoted in pydoc.bat. Content:\n{pydoc_content}"
 
 
 @pytest.mark.parametrize(
